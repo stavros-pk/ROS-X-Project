@@ -6,7 +6,7 @@
 <img width="1447" height="722" alt="Screenshot (73)" src="https://github.com/user-attachments/assets/8533ab65-cb60-4fed-9f17-22c604282bcf" />
 </p>
 
-> ROS-X is an experimental Autonomous Surface Vessel (ASV) developed using ROS 2 and inspired by the Ulstein X-BOW® hull concept. The project's goal is to achieve autonomous navigation, remote teleoperation, sensor fusion, mission planning and real-time vessel monitoring through a custom web dashboard. The project started in February of 2026 and it is the continuation of the Suomenlinna Project.
+> ROS-X is an experimental Autonomous Surface Vessel (ASV) developed using ROS 2 and inspired by the Ulstein X-BOW® hull concept. The project's goal is to achieve autonomous navigation, remote teleoperation, sensor fusion, mission planning and real-time vessel monitoring through a custom web dashboard. The project started in March of 2026 and it is the continuation of the Suomenlinna Project.
 
 ---
 
