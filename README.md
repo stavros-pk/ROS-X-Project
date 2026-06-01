@@ -93,7 +93,7 @@ The Azipod system remains under active development and will form a key component
 ```text
                     ┌─────────────────────┐
                     │   Web Dashboard     │
-                    │ Mission Planning    │
+                    │  Mission Planning   │
                     │ Telemetry & Control │
                     └──────────┬──────────┘
                                │ WiFi / Ethernet
@@ -132,16 +132,16 @@ The Azipod system remains under active development and will form a key component
 ## ROS Graph
 
 ```text
-gps_neo_m6  ──► gps_data  ──────────────► data_receiver
+gps_neo_m6  ──► gps_data
 mpu6050     ──► imu_data
 magnetometer──► heading_data
 dht         ──► environment_data
 tof_vl53l0x ──► proximity_data
 
 joy_node ──► /joy ──► serial_control ──► Port Motor
-                                    ──► Starboard Motor
-                                    ──► Port Angle
-                                    ──► Starboard Angle
+                                     ──► Starboard Motor
+                                     ──► Port Angle
+                                     ──► Starboard Angle
 
 ```
 
