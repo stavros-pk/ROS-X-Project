@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pi Control Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet"/>
+
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet/dist/leaflet.css"
+/>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0a0c0f;
+  --surface: #11151a;
+  --card:    #181d24;
+  --border:  rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --accent:  #00e5a0;
+  --accent2: #0096ff;
+  --danger:  #ff4d4d;
+  --warn:    #ffaa00;
+  --text:    #e8edf3;
+  --muted:   #6b7a8d;
+  --mono:    'JetBrains Mono', monospace;
+  --sans:    'Syne', sans-serif;
+}
+body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; display:flex; flex-direction:column; }
+
+header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 24px; height:54px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  position:sticky; top:0; z-index:99;
+  gap:16px;
+}
+.logo { font-size:14px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:9px; flex-shrink:0; }
+.logo-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); animation:pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+.tab-bar { display:flex; gap:2px; }
+.tab-btn {
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  letter-spacing:.05em; text-transform:uppercase;
+  padding:6px 16px; border-radius:6px; border:1px solid transparent;
+  background:transparent; color:var(--muted); cursor:pointer; transition:all .15s;
+}
+.tab-btn:hover { color:var(--text); background:rgba(255,255,255,.04); }
+.tab-btn.active { color:var(--accent); border-color:rgba(0,229,160,.25); background:rgba(0,229,160,.07); }
+
+.auth-bar { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.auth-bar input {
+  background:var(--card); border:1px solid var(--border2); border-radius:6px;
+  color:var(--text); font-family:var(--mono); font-size:12px;
+  padding:5px 10px; outline:none;
+}
+.auth-bar input:focus { border-color:var(--accent); }
+.auth-bar input::placeholder { color:var(--muted); }
+#api-key { width:160px; } #pi-host { width:170px; }
+
+#conn-status {
+  font-size:11px; font-family:var(--mono); padding:4px 10px;
+  border-radius:20px; border:1px solid var(--border2); color:var(--muted); white-space:nowrap;
+}
+#conn-status.ok    { border-color:var(--accent); color:var(--accent); }
+#conn-status.error { border-color:var(--danger); color:var(--danger); }
+
+.btn {
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  padding:6px 14px; border-radius:6px; border:1px solid var(--border2);
+  background:transparent; color:var(--text); cursor:pointer; transition:all .15s;
+}
+.btn:hover { background:var(--card); }
+.btn.primary { background:var(--accent); color:#0a0c0f; border-color:var(--accent); }
+.btn.primary:hover { filter:brightness(1.1); }
+.btn.danger  { background:rgba(255,77,77,.12); border-color:var(--danger); color:var(--danger); }
+.btn.danger:hover { background:rgba(255,77,77,.22); }
+.btn.warn    { background:rgba(255,170,0,.12); border-color:var(--warn); color:var(--warn); }
+.btn.accent2 { background:rgba(0,150,255,.12); border-color:var(--accent2); color:var(--accent2); }
+.btn.accent2:hover { background:rgba(0,150,255,.22); }
+.btn:disabled { opacity:.35; cursor:not-allowed; pointer-events:none; }
+
+.page { display:none; padding:18px 24px; flex:1; }
+.page.active { display:flex; flex-direction:column; gap:16px; }
+
+/* ── CAMERA ── */
+.cam-grid { display:grid; grid-template-columns:1fr 320px; gap:16px; }
+@media(max-width:900px){ .cam-grid{grid-template-columns:1fr} }
+.cam-frame { position:relative; background:#000; border:1px solid var(--border); border-radius:10px; overflow:hidden; aspect-ratio:16/9; }
+.cam-frame img { width:100%; height:100%; object-fit:contain; display:block; }
+.cam-overlay { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:10px; pointer-events:none; }
+.cam-badge { align-self:flex-start; font-family:var(--mono); font-size:10px; font-weight:500; padding:3px 8px; border-radius:4px; background:rgba(0,229,160,.15); border:1px solid rgba(0,229,160,.4); color:var(--accent); text-transform:uppercase; letter-spacing:.08em; }
+.cam-badge.offline { background:rgba(255,77,77,.15); border-color:rgba(255,77,77,.4); color:var(--danger); }
+.cam-ts { align-self:flex-end; font-family:var(--mono); font-size:11px; color:rgba(255,255,255,.45); }
+.cam-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:10px; color:var(--muted); font-family:var(--mono); font-size:12px; }
+.cam-placeholder svg { opacity:.25; }
+.cam-controls { display:flex; gap:8px; flex-wrap:wrap; }
+.stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+@media(max-width:1100px){ .stats-row{grid-template-columns:repeat(2,1fr)} }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+.stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:5px; font-family:var(--mono); }
+.stat-value { font-size:21px; font-weight:600; line-height:1; color:var(--text); }
+.stat-value.warn   { color:var(--warn); }
+.stat-value.danger { color:var(--danger); }
+.stat-bar { margin-top:6px; height:3px; background:var(--border); border-radius:2px; }
+.stat-bar-fill { height:100%; border-radius:2px; background:var(--accent); transition:width .5s; }
+.stat-bar-fill.warn   { background:var(--warn); }
+.stat-bar-fill.danger { background:var(--danger); }
+.panel { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.panel-title { font-size:10px; text-transform:uppercase; letter-spacing:.1em; font-family:var(--mono); color:var(--muted); padding:11px 14px 9px; border-bottom:1px solid var(--border); }
+.panel-body { padding:12px 14px; }
+.ctrl-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.ctrl-btn { display:flex; align-items:center; gap:7px; padding:9px 12px; border-radius:7px; border:1px solid var(--border2); background:var(--surface); color:var(--text); font-family:var(--sans); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+.ctrl-btn:hover { background:rgba(255,255,255,.05); }
+.ctrl-btn.red { border-color:rgba(255,77,77,.35); }
+.ctrl-btn.red:hover { background:rgba(255,77,77,.1); }
+.ctrl-btn.orange { border-color:rgba(255,170,0,.35); }
+.ctrl-btn.orange:hover { background:rgba(255,170,0,.1); }
+.term-output { font-family:var(--mono); font-size:11px; background:#060810; border:1px solid var(--border); border-radius:6px; padding:9px; height:160px; overflow-y:auto; line-height:1.6; margin-bottom:8px; }
+.term-output .line { margin-bottom:1px; word-break:break-all; }
+.term-output .cmd { color:var(--accent); }
+.term-output .out { color:rgba(255,255,255,.7); }
+.term-output .err { color:var(--danger); }
+.term-output .sys { color:var(--muted); font-style:italic; }
+.term-input-row { display:flex; gap:7px; }
+.term-input { flex:1; background:#060810; border:1px solid var(--border2); border-radius:6px; color:var(--accent); font-family:var(--mono); font-size:12px; padding:6px 10px; outline:none; }
+.term-input:focus { border-color:var(--accent); }
+.term-input::placeholder { color:var(--muted); }
+
+/* ── NAVIGATE ── */
+.nav-grid { display:grid; grid-template-columns:1fr 320px; gap:16px; }
+@media(max-width:900px){ .nav-grid{grid-template-columns:1fr} }
+.dpad-wrap { display:flex; flex-direction:column; align-items:center; gap:18px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:22px 18px; }
+.dpad-title { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
+.dpad { display:grid; grid-template-columns:64px 64px 64px; grid-template-rows:64px 64px 64px; gap:6px; }
+.dpad-btn { display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid var(--border2); background:var(--surface); color:var(--text); font-size:22px; cursor:pointer; transition:all .1s; user-select:none; -webkit-user-select:none; }
+.dpad-btn:hover  { background:rgba(0,229,160,.1); border-color:rgba(0,229,160,.35); color:var(--accent); }
+.dpad-btn:active { background:rgba(0,229,160,.25); transform:scale(.92); }
+.dpad-center { background:rgba(0,229,160,.08); border-color:rgba(0,229,160,.2); font-size:11px; font-family:var(--mono); font-weight:500; color:var(--accent); }
+.dpad-blank { visibility:hidden; }
+.speed-row { display:flex; align-items:center; gap:12px; width:100%; max-width:300px; }
+.speed-row label { font-family:var(--mono); font-size:11px; color:var(--muted); white-space:nowrap; min-width:38px; }
+.speed-row input[type=range] { flex:1; accent-color:var(--accent); }
+.speed-val { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--accent); min-width:36px; text-align:right; }
+.pos-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.pos-card { background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:10px 12px; }
+.pos-label { font-family:var(--mono); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px; }
+.pos-val   { font-family:var(--mono); font-size:14px; font-weight:500; color:var(--text); }
+.nav-log { font-family:var(--mono); font-size:11px; background:#060810; border:1px solid var(--border); border-radius:6px; padding:8px; height:130px; overflow-y:auto; line-height:1.6; }
+.nav-log .entry { color:rgba(255,255,255,.6); }
+.nav-log .entry.cmd { color:var(--accent2); }
+.nav-log .entry.ack { color:var(--accent); }
+.nav-log .entry.err { color:var(--danger); }
+
+/* ── MISSION ── */
+.mission-grid { display:grid; grid-template-columns:1fr 360px; gap:16px; flex:1; }
+@media(max-width:900px){ .mission-grid{grid-template-columns:1fr} }
+#map-canvas {
+  height:460px;
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+}
+.mission-right { display:flex; flex-direction:column; gap:12px; }
+.wp-add-form { display:flex; flex-direction:column; gap:8px; }
+.wp-add-form .row { display:flex; gap:7px; align-items:center; }
+.wp-add-form .row label { font-family:var(--mono); font-size:11px; color:var(--muted); width:28px; }
+.wp-add-form input[type=text] { flex:1; background:var(--surface); border:1px solid var(--border2); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:12px; padding:5px 9px; outline:none; }
+.wp-add-form input:focus { border-color:var(--accent); }
+.wp-list { display:flex; flex-direction:column; gap:5px; max-height:300px; overflow-y:auto; }
+.wp-item { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); border-radius:7px; padding:8px 10px; transition:border-color .15s; }
+.wp-item.active-wp { border-color:var(--accent2); background:rgba(0,150,255,.07); }
+.wp-item.reached   { border-color:var(--accent);  background:rgba(0,229,160,.06); }
+.wp-num { font-family:var(--mono); font-size:10px; font-weight:500; color:#0a0c0f; background:var(--accent); border-radius:4px; width:20px; height:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.wp-item.active-wp .wp-num { background:var(--accent2); }
+.wp-item.reached   .wp-num { background:var(--muted); }
+.wp-coords { font-family:var(--mono); font-size:11px; color:var(--text); flex:1; }
+.wp-lbl-txt { font-size:11px; color:var(--muted); margin-left:2px; }
+.wp-alt-txt { font-family:var(--mono); font-size:10px; color:var(--muted); }
+.wp-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:2px 4px; border-radius:4px; transition:color .12s; }
+.wp-del:hover { color:var(--danger); }
+.mission-status { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 14px; font-family:var(--mono); font-size:12px; }
+.ms-badge { padding:3px 10px; border-radius:4px; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.06em; }
+.ms-badge.idle    { background:rgba(107,122,141,.15); border:1px solid var(--muted); color:var(--muted); }
+.ms-badge.running { background:rgba(0,150,255,.15); border:1px solid var(--accent2); color:var(--accent2); animation:blink 1.2s step-start infinite; }
+.ms-badge.done    { background:rgba(0,229,160,.12); border:1px solid var(--accent); color:var(--accent); }
+.ms-badge.paused  { background:rgba(255,170,0,.12); border:1px solid var(--warn); color:var(--warn); }
+@keyframes blink { 50%{opacity:.5} }
+.ms-progress { flex:1; background:var(--border); border-radius:2px; height:4px; }
+.ms-progress-fill { height:100%; border-radius:2px; background:var(--accent2); transition:width .4s; }
+.ms-text { color:var(--muted); font-size:11px; white-space:nowrap; }
+.mission-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* modal */
+.modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:200; align-items:center; justify-content:center; }
+.modal-bg.show { display:flex; }
+.modal { background:var(--card); border:1px solid var(--border2); border-radius:12px; padding:26px 30px; max-width:360px; width:90%; text-align:center; }
+.modal h3 { font-size:16px; margin-bottom:7px; }
+.modal p  { font-size:13px; color:var(--muted); margin-bottom:18px; }
+.modal-btns { display:flex; gap:9px; justify-content:center; }
+#toast { position:fixed; bottom:22px; right:22px; font-family:var(--mono); font-size:12px; padding:9px 16px; border-radius:7px; background:var(--card); border:1px solid var(--border2); color:var(--text); transform:translateY(50px); opacity:0; transition:all .22s; z-index:300; }
+#toast.show { transform:translateY(0); opacity:1; }
+#toast.ok  { border-color:var(--accent); color:var(--accent); }
+#toast.err { border-color:var(--danger); color:var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>Pi Control</div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('camera',this)">📷 Camera</button>
+    <button class="tab-btn"        onclick="switchTab('nav',this)">🕹 Navigate</button>
+    <button class="tab-btn"        onclick="switchTab('mission',this)">🗺 Mission</button>
+  </div>
+  <div class="auth-bar">
+    <span id="conn-status">not connected</span>
+    <input type="password" id="api-key"  placeholder="API key"/>
+    <input type="text"     id="pi-host"  placeholder="http://pi.local:5000"/>
+    <button class="btn primary" onclick="connect()">Connect</button>
+  </div>
+</header>
+
+<!-- ═══════════════ TAB 1 · CAMERA ═══════════════ -->
+<div id="page-camera" class="page active">
+  <div class="cam-grid">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="cam-frame">
+        <div class="cam-placeholder" id="cam-placeholder">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 7 16 12 23 17V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+          Connect to start streaming
+        </div>
+        <img id="cam-img" style="display:none"/>
+        <div class="cam-overlay">
+          <span class="cam-badge offline" id="cam-badge">OFFLINE</span>
+          <span class="cam-ts" id="cam-ts"></span>
+        </div>
+      </div>
+      <div class="cam-controls">
+        <button class="btn primary" onclick="startStream()">▶ Start stream</button>
+        <button class="btn"         onclick="stopStream()">■ Stop</button>
+        <button class="btn"         onclick="takeSnapshot()">📷 Snapshot</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value" id="s-cpu">—</div><div class="stat-bar"><div class="stat-bar-fill" id="b-cpu" style="width:0%"></div></div></div>
+        <div class="stat-card"><div class="stat-label">RAM</div><div class="stat-value" id="s-ram">—</div><div class="stat-bar"><div class="stat-bar-fill" id="b-ram" style="width:0%"></div></div></div>
+        <div class="stat-card"><div class="stat-label">Temp</div><div class="stat-value" id="s-temp">—</div></div>
+        <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value" id="s-uptime" style="font-size:15px">—</div></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="panel">
+        <div class="panel-title">System control</div>
+        <div class="panel-body">
+          <div class="ctrl-grid">
+            <button class="ctrl-btn red" onclick="confirmAction('reboot','Reboot the Pi?','Disconnects for ~30s.')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Reboot
+            </button>
+            <button class="ctrl-btn red" onclick="confirmAction('shutdown','Shut down?','Need physical access to restart.')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>Shutdown
+            </button>
+            <button class="ctrl-btn orange" onclick="sendControl('restart_cam')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Restart cam
+            </button>
+            <button class="ctrl-btn" onclick="fetchStats()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="flex:1">
+        <div class="panel-title">Terminal</div>
+        <div class="panel-body" style="display:flex;flex-direction:column">
+          <div class="term-output" id="term-out"><div class="line sys">Connect to a Pi to run commands.</div></div>
+          <div class="term-input-row">
+            <input class="term-input" id="term-input" placeholder="$ command…" onkeydown="termKey(event)"/>
+            <button class="btn primary" onclick="runCmd()">Run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 2 · NAVIGATE ═══════════════ -->
+<div id="page-nav" class="page">
+  <div class="nav-grid">
+    <!-- Left col -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- D-pad -->
+      <div class="dpad-wrap">
+        <div class="dpad-title">Directional control  ·  WASD keys also work</div>
+        <div class="dpad">
+          <div class="dpad-blank"></div>
+          <div class="dpad-btn" onmousedown="navPress('forward')"  onmouseup="navRelease()" ontouchstart="navPress('forward')"  ontouchend="navRelease()">▲</div>
+          <div class="dpad-blank"></div>
+          <div class="dpad-btn" onmousedown="navPress('left')"     onmouseup="navRelease()" ontouchstart="navPress('left')"     ontouchend="navRelease()">◄</div>
+          <div class="dpad-btn dpad-center" onmousedown="navPress('stop')"    onmouseup="navRelease()" ontouchstart="navPress('stop')"    ontouchend="navRelease()">STOP</div>
+          <div class="dpad-btn" onmousedown="navPress('right')"    onmouseup="navRelease()" ontouchstart="navPress('right')"    ontouchend="navRelease()">►</div>
+          <div class="dpad-blank"></div>
+          <div class="dpad-btn" onmousedown="navPress('backward')" onmouseup="navRelease()" ontouchstart="navPress('backward')" ontouchend="navRelease()">▼</div>
+          <div class="dpad-blank"></div>
+        </div>
+
+        <div class="speed-row">
+          <label>Speed</label>
+          <input type="range" min="0" max="100" value="50" id="speed-slider" oninput="document.getElementById('speed-val').textContent=this.value+'%'"/>
+          <span class="speed-val" id="speed-val">50%</span>
+        </div>
+      </div>
+
+      <!-- Heading dial -->
+      <div class="panel">
+        <div class="panel-title">Heading / yaw</div>
+        <div class="panel-body" style="display:flex;align-items:center;gap:20px">
+          <canvas id="heading-canvas" width="120" height="120" style="cursor:crosshair;flex-shrink:0"></canvas>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase">Heading</div>
+            <div style="font-family:var(--mono);font-size:30px;font-weight:500;color:var(--accent)" id="heading-val">000°</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right col -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- Telemetry -->
+      <div class="panel">
+        <div class="panel-title">Telemetry / position</div>
+        <div class="panel-body">
+          <div class="pos-grid">
+            <div class="pos-card"><div class="pos-label">Lat</div><div class="pos-val" id="pos-lat">—</div></div>
+            <div class="pos-card"><div class="pos-label">Lon</div><div class="pos-val" id="pos-lon">—</div></div>
+            <div class="pos-card"><div class="pos-label">Depth m</div><div class="pos-val" id="pos-depth">—</div></div>
+            <div class="pos-card"><div class="pos-label">Heading</div><div class="pos-val" id="pos-hdg">—</div></div>
+            <div class="pos-card"><div class="pos-label">Speed</div><div class="pos-val" id="pos-spd">—</div></div>
+            <div class="pos-card"><div class="pos-label">Mode</div><div class="pos-val" id="pos-mode" style="font-size:12px">—</div></div>
+          </div>
+          <button class="btn" onclick="pollPosition()" style="width:100%;margin-top:10px">🔄 Poll telemetry</button>
+        </div>
+      </div>
+
+      <!-- Command log -->
+      <div class="panel">
+        <div class="panel-title">Command log</div>
+        <div class="panel-body">
+          <div class="nav-log" id="nav-log"><div class="entry">Waiting for commands…</div></div>
+        </div>
+      </div>
+
+      <!-- Keyboard hint -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono);color:var(--muted);margin-bottom:10px">Keyboard shortcuts</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);line-height:2.2;display:grid;grid-template-columns:1fr 1fr;gap:0 8px">
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">W</kbd> Forward</span>
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">S</kbd> Backward</span>
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">A</kbd> Turn left</span>
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">D</kbd> Turn right</span>
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">Space</kbd> Stop</span>
+          <span><kbd style="background:var(--surface);border:1px solid var(--border2);border-radius:3px;padding:1px 5px;color:var(--text)">Q / E</kbd> Up / Down</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 3 · MISSION PLANNER ═══════════════ -->
+<div id="page-mission" class="page">
+  <div class="mission-status">
+    <span class="ms-badge idle" id="ms-badge">Idle</span>
+    <div class="ms-progress"><div class="ms-progress-fill" id="ms-prog" style="width:0%"></div></div>
+    <span class="ms-text" id="ms-text">No mission loaded</span>
+  </div>
+
+  <div class="mission-grid" style="flex:1">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div id="map-canvas"></div>
+      
+<div class="panel">
+  <div class="panel-title" data-marine>Nearby marine locations</div>
+  <div class="panel-body">
+    <div id="nearby-ports"
+      style="font-family:var(--mono);font-size:11px;color:var(--text);display:flex;flex-direction:column;gap:8px;max-height:160px;overflow-y:auto">
+      Searching nearby ports...
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:11px;color:var(--muted)">
+        <span>🖱 Click to place waypoint</span>
+        <span style="margin-left:auto">Scroll = zoom · Drag = pan</span>
+        <button class="btn" onclick="resetMapView()" style="font-size:11px;padding:4px 10px">Reset view</button>
+      </div>
+    </div>
+
+    <div class="mission-right">
+      <!-- Add WP form -->
+      <div class="panel">
+        <div class="panel-title">Add waypoint</div>
+        <div class="panel-body">
+          <div class="wp-add-form">
+            <div class="row"><label>Lat</label><input type="text" id="wp-lat" placeholder="37.7749"/></div>
+            <div class="row"><label>Lon</label><input type="text" id="wp-lon" placeholder="-122.4194"/></div>
+            <div class="row">
+              <label>Alt</label>
+              <input type="text" id="wp-alt" placeholder="10" style="width:70px;flex:none"/>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">m</span>
+              <label style="margin-left:8px;width:auto">Label</label>
+              <input type="text" id="wp-lbl" placeholder="optional" style="flex:1"/>
+            </div>
+            <div style="display:flex;gap:7px;margin-top:2px">
+              <button class="btn primary" onclick="addWaypoint()" style="flex:1">+ Add waypoint</button>
+              <button class="btn" onclick="useCurrentPos()" title="Use current GPS">📍 GPS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WP list -->
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Waypoints</span>
+          <span id="wp-count" style="color:var(--text);font-size:11px">0 points</span>
+        </div>
+        <div class="panel-body" style="padding-top:8px">
+          <div class="wp-list" id="wp-list">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:14px 0">No waypoints.<br>Click the map or use the form.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mission actions -->
+      <div class="mission-actions">
+        <button class="btn primary" id="btn-start" onclick="startMission()" style="flex:1">▶ Start mission</button>
+        <button class="btn warn"    id="btn-pause" onclick="pauseMission()" disabled>⏸ Pause</button>
+        <button class="btn danger"  id="btn-abort" onclick="abortMission()" disabled>⏹ Abort</button>
+      </div>
+      <div style="display:flex;gap:7px">
+        <button class="btn" onclick="exportMission()" style="flex:1">⬇ Export JSON</button>
+        <button class="btn" onclick="importMission()" style="flex:1">⬆ Import JSON</button>
+        <button class="btn danger" onclick="clearWaypoints()">🗑</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Confirm</h3>
+    <p  id="modal-desc">Are you sure?</p>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="modalConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)"/>
+<div id="toast"></div>
+
+<script>
+/* ═══ State ═══ */
+let apiKey='', piHost='', streamActive=false;
+let statsTimer=null, navHoldTimer=null;
+let pendingAction=null;
+let targetHeading=0;
+
+/* ═══ Tabs ═══ */
+function switchTab(id, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+
+  if (id==='mission') {
+    setTimeout(() => {
+      map.invalidateSize();
+      drawMap();
+    }, 200);
+  }
+}
+
+/* ═══ Connection ═══ */
+function connect() {
+  apiKey = document.getElementById('api-key').value.trim();
+  piHost = document.getElementById('pi-host').value.trim().replace(/\/$/,'');
+  if (!piHost||!apiKey) { toast('Enter host and API key','err'); return; }
+  setStatus('connecting…','');
+  fetch(piHost+'/health')
+    .then(r=>r.json())
+    .then(()=>{
+      setStatus('connected','ok');
+      toast('Connected to '+piHost,'ok');
+      fetchStats();
+      statsTimer=setInterval(fetchStats,5000);
+      termLog('sys','Connected to '+piHost);
+      navLog('ack','Connected — ready');
+    })
+    .catch(()=>{ setStatus('unreachable','error'); toast('Cannot reach '+piHost,'err'); });
+}
+function setStatus(t,c){ const e=document.getElementById('conn-status'); e.textContent=t; e.className=c; }
+
+/* ═══ Camera ═══ */
+function startStream() {
+  if (!piHost) { toast('Not connected','err'); return; }
+  const img=document.getElementById('cam-img');
+  img.src=piHost+'/stream?key='+encodeURIComponent(apiKey);
+  img.style.display='block';
+  document.getElementById('cam-placeholder').style.display='none';
+  document.getElementById('cam-badge').textContent='LIVE';
+  document.getElementById('cam-badge').className='cam-badge';
+  streamActive=true; tickTs();
+}
+function stopStream() {
+  const img=document.getElementById('cam-img');
+  img.src=''; img.style.display='none';
+  document.getElementById('cam-placeholder').style.display='flex';
+  document.getElementById('cam-badge').textContent='OFFLINE';
+  document.getElementById('cam-badge').className='cam-badge offline';
+  streamActive=false;
+}
+function tickTs() {
+  if (!streamActive) return;
+  document.getElementById('cam-ts').textContent=new Date().toLocaleTimeString();
+  setTimeout(tickTs,1000);
+}
+function takeSnapshot() {
+  if (!piHost) { toast('Not connected','err'); return; }
+  const a=document.createElement('a');
+  a.href=piHost+'/snapshot?key='+encodeURIComponent(apiKey);
+  a.download='snap_'+Date.now()+'.jpg'; a.click();
+}
+
+/* ═══ Stats ═══ */
+function fetchStats() {
+  if (!piHost) return;
+  fetch(piHost+'/api/stats',{headers:{'X-API-Key':apiKey}})
+    .then(r=>r.json())
+    .then(d=>{
+      setStat('s-cpu','b-cpu',d.cpu_percent,'%');
+      setStat('s-ram','b-ram',d.ram_percent,'%');
+      const t=d.cpu_temp_c;
+      document.getElementById('s-temp').textContent=t!=null?t+'°C':'N/A';
+      document.getElementById('s-temp').className='stat-value'+(t>75?' danger':t>60?' warn':'');
+      document.getElementById('s-uptime').textContent=fmtUp(d.uptime_s);
+    }).catch(()=>{});
+}
+function setStat(vi,bi,pct,sfx) {
+  const e=document.getElementById(vi), b=document.getElementById(bi);
+  e.textContent=pct.toFixed(0)+sfx;
+  e.className='stat-value'+(pct>90?' danger':pct>70?' warn':'');
+  b.style.width=pct+'%';
+  b.className='stat-bar-fill'+(pct>90?' danger':pct>70?' warn':'');
+}
+function fmtUp(s){ const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60); return d>0?d+'d '+h+'h':h>0?h+'h '+m+'m':m+'m'; }
+
+/* ═══ System control ═══ */
+function sendControl(action) {
+  if (!piHost) { toast('Not connected','err'); return; }
+  fetch(piHost+'/api/control/'+action,{method:'POST',headers:{'X-API-Key':apiKey}})
+    .then(r=>r.json())
+    .then(d=>toast(action+': '+(d.ok?'OK':'failed'),d.ok?'ok':'err'))
+    .catch(e=>toast('Error: '+e,'err'));
+}
+
+/* ═══ Terminal ═══ */
+function termKey(e){ if(e.key==='Enter') runCmd(); }
+function runCmd() {
+  const inp=document.getElementById('term-input'), cmd=inp.value.trim();
+  if (!cmd||!piHost) return;
+  inp.value=''; termLog('cmd','$ '+cmd);
+  fetch(piHost+'/api/shell',{method:'POST',headers:{'X-API-Key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({cmd})})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.stdout) d.stdout.split('\n').filter(Boolean).forEach(l=>termLog('out',l));
+      if(d.stderr) d.stderr.split('\n').filter(Boolean).forEach(l=>termLog('err',l));
+    }).catch(e=>termLog('err','Error: '+e));
+}
+function termLog(type,text){ const el=document.getElementById('term-out'),div=document.createElement('div'); div.className='line '+type; div.textContent=text; el.appendChild(div); el.scrollTop=el.scrollHeight; }
+
+/* ═══ Navigation ═══ */
+const KEYS={w:'forward',s:'backward',a:'left',d:'right',' ':'stop',q:'up',e:'down'};
+const activeKeys=new Set();
+document.addEventListener('keydown', ev=>{
+  if (!document.getElementById('page-nav').classList.contains('active')) return;
+  if (['input','textarea'].includes(document.activeElement.tagName.toLowerCase())) return;
+  const cmd=KEYS[ev.key.toLowerCase()];
+  if (cmd && !activeKeys.has(cmd)) { ev.preventDefault(); activeKeys.add(cmd); sendNav(cmd,true); }
+});
+document.addEventListener('keyup', ev=>{
+  if (!document.getElementById('page-nav').classList.contains('active')) return;
+  const cmd=KEYS[ev.key.toLowerCase()];
+  if (cmd) { activeKeys.delete(cmd); sendNav('stop',true); }
+});
+
+function navPress(cmd) { sendNav(cmd,true); navHoldTimer=setInterval(()=>sendNav(cmd,true),120); }
+function navRelease() { clearInterval(navHoldTimer); sendNav('stop',true); }
+
+function sendNav(cmd, active) {
+  const speed=parseInt(document.getElementById('speed-slider').value);
+  navLog('cmd', cmd.toUpperCase()+' spd='+speed+'%');
+  if (!piHost) { navLog('err','Not connected'); return; }
+  fetch(piHost+'/api/nav',{method:'POST',headers:{'X-API-Key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({cmd,speed,active})})
+    .then(r=>r.json()).then(d=>{ if(d.ok) navLog('ack','ACK'); }).catch(()=>navLog('err','No response'));
+}
+
+function sendHeading() {
+  navLog('cmd','HEADING → '+targetHeading+'°');
+  if (!piHost) { navLog('err','Not connected'); return; }
+  fetch(piHost+'/api/nav',{method:'POST',headers:{'X-API-Key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({cmd:'heading',value:targetHeading})})
+    .then(r=>r.json()).then(d=>navLog('ack',d.ok?'Heading ACK':'Heading FAIL')).catch(()=>navLog('err','No response'));
+}
+
+function pollPosition() {
+  if (!piHost) { toast('Not connected','err'); return; }
+  fetch(piHost+'/api/telemetry',{headers:{'X-API-Key':apiKey}})
+    .then(r=>r.json())
+    .then(d=>{
+      ['lat','lon','alt','hdg','spd','mode'].forEach(k=>{
+        const el=document.getElementById('pos-'+k);
+        const val=d[k==='hdg'?'heading':k==='spd'?'speed':k];
+        el.textContent=val!=null?(typeof val==='number'?val.toFixed(k==='mode'?0:k==='lat'||k==='lon'?6:1):val):'—';
+        if(k==='hdg'&&val!=null) el.textContent=val+'°';
+      });
+      navLog('ack','Telemetry updated');
+    }).catch(()=>navLog('err','Telemetry failed'));
+}
+function navLog(type,msg){ const el=document.getElementById('nav-log'),div=document.createElement('div'); div.className='entry '+type; div.textContent='['+new Date().toLocaleTimeString()+'] '+msg; el.appendChild(div); el.scrollTop=el.scrollHeight; }
+
+/* Heading dial */
+function drawDial(deg) {
+  const c=document.getElementById('heading-canvas'), ctx=c.getContext('2d'), cx=60, cy=60, r=52;
+  ctx.clearRect(0,0,120,120);
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle='#0d1117'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.1)'; ctx.lineWidth=1; ctx.stroke();
+  for (let i=0;i<36;i++) {
+    const a=(i*10-90)*Math.PI/180, len=i%9===0?8:4;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*(r-1),cy+Math.sin(a)*(r-1));
+    ctx.lineTo(cx+Math.cos(a)*(r-1-len),cy+Math.sin(a)*(r-1-len));
+    ctx.strokeStyle=i%9===0?'rgba(255,255,255,.5)':'rgba(255,255,255,.18)'; ctx.lineWidth=1; ctx.stroke();
+  }
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([l,ang])=>{
+    const a=(ang-90)*Math.PI/180;
+    ctx.fillStyle=l==='N'?'#00e5a0':'rgba(255,255,255,.5)';
+    ctx.font='9px "JetBrains Mono",monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(l,cx+Math.cos(a)*(r-14),cy+Math.sin(a)*(r-14));
+  });
+  const a=(deg-90)*Math.PI/180;
+  ctx.beginPath(); ctx.moveTo(cx+Math.cos(a)*40,cy+Math.sin(a)*40); ctx.lineTo(cx+Math.cos(a+Math.PI)*10,cy+Math.sin(a+Math.PI)*10);
+  ctx.strokeStyle='#0096ff'; ctx.lineWidth=2.5; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fillStyle='#0096ff'; ctx.fill();
+}
+function headingClick(e) {
+  const c=document.getElementById('heading-canvas'), rect=c.getBoundingClientRect();
+  const x=e.clientX-rect.left-60, y=e.clientY-rect.top-60;
+  let deg=Math.round(Math.atan2(y,x)*180/Math.PI+90);
+  if(deg<0)deg+=360; if(deg>=360)deg-=360;
+  targetHeading=deg; document.getElementById('heading-val').textContent=String(deg).padStart(3,'0')+'°'; drawDial(deg);
+}
+drawDial(0);
+
+
+/* ═══ Mission Planner · OpenSeaMap ═══ */
+
+let waypoints = [];
+let missionState = 'idle';
+let currentWpIdx = -1;
+let missionTimer = null;
+
+/* MAP INIT */
+
+const map = L.map('map-canvas').setView(
+  [37.93743, 23.62164],
+  10
+);
+
+/* OpenStreetMap base */
+
+L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+  {
+    attribution: '&copy; CartoDB',
+    maxZoom: 19
+  }
+).addTo(map);
+
+/* OpenSeaMap overlay — with error handler so missing tiles don't break the map */
+const seamarkLayer = L.tileLayer(
+  'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
+  {
+    attribution: '&copy; <a href="https://www.openseamap.org">OpenSeaMap</a>',
+    transparent: true,
+    opacity: 0.85,
+    maxZoom: 18,
+    errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+  }
+);
+seamarkLayer.on('tileerror', function(e) {
+  e.tile.style.display = 'none'; // silently hide failed tiles
+});
+seamarkLayer.addTo(map);
+
+/* WAYPOINTS */
+
+let waypointMarkers = [];
+let waypointLine = null;
+
+function drawMap() {
+
+  waypointMarkers.forEach(marker => {
+    map.removeLayer(marker);
+  });
+
+  waypointMarkers = [];
+
+  if (waypointLine) {
+    map.removeLayer(waypointLine);
+  }
+
+  const coords = [];
+
+  waypoints.forEach((wp, index) => {
+
+    coords.push([wp.lat, wp.lon]);
+
+    const marker = L.marker([wp.lat, wp.lon])
+      .addTo(map)
+      .bindPopup(`
+        <b>Waypoint ${index + 1}</b><br>
+        Lat: ${wp.lat}<br>
+        Lon: ${wp.lon}<br>
+        Alt: ${wp.alt}m
+      `);
+
+    waypointMarkers.push(marker);
+  });
+
+  if (coords.length > 1) {
+
+    waypointLine = L.polyline(coords, {
+      color: '#0096ff',
+      weight: 3,
+      dashArray: '6,6'
+    }).addTo(map);
+  }
+}
+
+/* DISTANCE */
+
+function haversine(lat1, lon1, lat2, lon2) {
+
+  const R = 6371000;
+
+  const dLat =
+    (lat2 - lat1) * Math.PI / 180;
+
+  const dLon =
+    (lon2 - lon1) * Math.PI / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+
+  return R * 2 * Math.atan2(
+    Math.sqrt(a),
+    Math.sqrt(1 - a)
+  );
+}
+
+/* MAP CLICK */
+
+map.on('click', function(e) {
+
+  document.getElementById('wp-lat').value =
+    e.latlng.lat.toFixed(6);
+
+  document.getElementById('wp-lon').value =
+    e.latlng.lng.toFixed(6);
+
+  if (!document.getElementById('wp-alt').value) {
+    document.getElementById('wp-alt').value = '10';
+  }
+
+  addWaypoint();
+});
+
+/* RESET VIEW */
+
+function resetMapView() {
+
+  if (!waypoints.length) return;
+
+  const group =
+    new L.featureGroup(waypointMarkers);
+
+  map.fitBounds(
+    group.getBounds().pad(0.2)
+  );
+}
+
+/* MARINE LOCATIONS */
+
+let portMarkers = [];
+let portSearchTimer = null;
+let marineCache = []; // persists across searches
+let lastRefLat = null, lastRefLon = null;
+const REQUERY_THRESHOLD_NM = 5; // only re-query Overpass if reference moves >5nm
+
+// Overpass mirror list — tried in order on failure
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter'
+];
+
+// Seamark type → display config
+const SEAMARK_ICONS = {
+  harbour:            { emoji:'⚓', color:'#00e5a0', label:'Harbour' },
+  marina:             { emoji:'⛵', color:'#0096ff', label:'Marina' },
+  anchorage:          { emoji:'⚓', color:'#ffaa00', label:'Anchorage' },
+  lighthouse:         { emoji:'🔦', color:'#ff9500', label:'Lighthouse' },
+  light_major:        { emoji:'🔦', color:'#ff9500', label:'Major Light' },
+  light_minor:        { emoji:'💡', color:'#ffcc00', label:'Light' },
+  buoy_lateral:       { emoji:'🟢', color:'#00cc88', label:'Lateral Buoy' },
+  buoy_cardinal:      { emoji:'🔶', color:'#ffaa00', label:'Cardinal Buoy' },
+  buoy_safe_water:    { emoji:'🔴', color:'#ff4d4d', label:'Safe Water Buoy' },
+  beacon_lateral:     { emoji:'📍', color:'#00cc88', label:'Beacon' },
+  beacon_cardinal:    { emoji:'📍', color:'#ffaa00', label:'Cardinal Beacon' },
+  separation_zone:    { emoji:'⚠️', color:'#ff4d4d', label:'Traffic Zone' },
+  mooring:            { emoji:'🔗', color:'#6b7a8d', label:'Mooring' },
+  rock:               { emoji:'🪨', color:'#ff4d4d', label:'Rock' },
+  wreck:              { emoji:'🚢', color:'#ff4d4d', label:'Wreck' },
+};
+
+function getSeamarkMeta(tags) {
+  const st = tags?.['seamark:type'] || tags?.leisure || 'unknown';
+  const cfg = SEAMARK_ICONS[st] || { emoji:'📌', color:'#6b7a8d', label: st.replace(/_/g,' ') };
+  return { type: st, ...cfg };
+}
+
+// Try each Overpass mirror in turn
+async function overpassFetch(query) {
+  for (const url of OVERPASS_MIRRORS) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 12000);
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query),
+        signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      console.log('[Overpass] OK via', url, '—', d.elements?.length, 'elements');
+      return d;
+    } catch (err) {
+      console.warn('[Overpass] Failed on', url, ':', err.message);
+    }
+  }
+  throw new Error('All Overpass mirrors failed');
+}
+
+async function getNearbyPorts(lat, lon) {
+  const container = document.getElementById('nearby-ports');
+  container.innerHTML = '<span style="color:var(--muted)">⟳ Searching marine data…</span>';
+
+  portMarkers.forEach(m => map.removeLayer(m));
+  portMarkers = [];
+
+  // Reference point: GPS → next waypoint → map centre
+  const gpsLat = document.getElementById('pos-lat').textContent;
+  const gpsLon = document.getElementById('pos-lon').textContent;
+  let refLat, refLon, refSource;
+
+  if (gpsLat !== '—' && gpsLon !== '—') {
+    refLat = parseFloat(gpsLat);
+    refLon = parseFloat(gpsLon);
+    refSource = 'GPS';
+  } else if (waypoints.length > 0) {
+    const nextWp = waypoints.find(w => !w.reached) || waypoints[0];
+    refLat = nextWp.lat;
+    refLon = nextWp.lon;
+    refSource = 'next waypoint';
+  } else {
+    const c = map.getCenter();
+    refLat = c.lat;
+    refLon = c.lng;
+    refSource = 'map centre';
+  }
+
+  // 20nm radius around reference point
+  const R = 20 * 1.852 / 111.12;
+  const bbox = `${refLat-R},${refLon-R},${refLat+R},${refLon+R}`;
+
+  document.querySelector('[data-marine]').textContent = `Nearby marine locations · ${refSource}`;
+  
+  const query = `
+[out:json][timeout:20];
+(
+  node["seamark:type"="harbour"](${bbox});
+  node["seamark:type"="anchorage"](${bbox});
+  node["seamark:type"="lighthouse"](${bbox});
+  node["seamark:type"="light_major"](${bbox});
+  node["seamark:type"="light_minor"](${bbox});
+  node["seamark:type"="buoy_lateral"](${bbox});
+  node["seamark:type"="buoy_cardinal"](${bbox});
+  node["seamark:type"="buoy_safe_water"](${bbox});
+  node["seamark:type"="beacon_lateral"](${bbox});
+  node["seamark:type"="beacon_cardinal"](${bbox});
+  node["seamark:type"="mooring"](${bbox});
+  node["seamark:type"="rock"](${bbox});
+  node["seamark:type"="wreck"](${bbox});
+  node["leisure"="marina"](${bbox});
+  node["man_made"="lighthouse"](${bbox});
+  node["harbour"="yes"](${bbox});
+);
+out body;
+  `.trim();
+
+  try {
+    const data = await overpassFetch(query);
+
+    if (!data.elements || !data.elements.length) {
+      container.innerHTML = '<span style="color:var(--muted)">No marine features in this area</span>';
+      return;
+    }
+
+    // Determine reference point: GPS → next waypoint → map centre
+    const gpsLat = document.getElementById('pos-lat').textContent;
+    const gpsLon = document.getElementById('pos-lon').textContent;
+    let refLat, refLon, refSource;
+
+    if (gpsLat !== '—' && gpsLon !== '—') {
+      refLat = parseFloat(gpsLat);
+      refLon = parseFloat(gpsLon);
+      refSource = 'GPS';
+    } else if (waypoints.length > 0) {
+      const nextWp = waypoints.find(w => !w.reached) || waypoints[0];
+      refLat = nextWp.lat;
+      refLon = nextWp.lon;
+      refSource = 'next waypoint';
+    } else {
+      const c = map.getCenter();
+      refLat = c.lat;
+      refLon = c.lng;
+      refSource = 'map centre';
+    }
+
+// Sort by distance from reference point
+data.elements.sort((a, b) =>
+  haversine(refLat, refLon, a.lat, a.lon) - haversine(refLat, refLon, b.lat, b.lon)
+);
+
+// Show which reference is being used
+container.innerHTML = `<span style="color:var(--muted);font-size:10px">Sorted by distance from ${refSource}</span>`;
+
+// Sort by distance from reference point
+data.elements.sort((a, b) => {
+  const da = haversine(refLat, refLon, a.lat, a.lon);
+  const db = haversine(refLat, refLon, b.lat, b.lon);
+  return da - db;
+});
+
+    container.innerHTML = '';
+    const shown = data.elements.slice(0, 20);
+
+    shown.forEach(el => {
+      if (el.lat == null || el.lon == null) return;
+
+      const name = el.tags?.name || el.tags?.['seamark:name'] || el.tags?.['seamark:light:name'] || 'Unnamed';
+      const meta = getSeamarkMeta(el.tags);
+      const dist = haversine(refLat, refLon, el.lat, el.lon);
+
+      // Sidebar entry
+      const item = document.createElement('div');
+      item.style.cssText = `padding:7px 9px;border:1px solid rgba(255,255,255,.07);border-radius:6px;background:#0d1117;cursor:pointer;display:flex;align-items:center;gap:9px;transition:border-color .15s`;
+      item.onmouseover = () => item.style.borderColor = meta.color;
+      item.onmouseout  = () => item.style.borderColor = 'rgba(255,255,255,.07)';
+      item.innerHTML = `
+        <span style="font-size:16px;flex-shrink:0">${meta.emoji}</span>
+        <div style="min-width:0;flex:1">
+          <div style="color:${meta.color};font-weight:600;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+          <div style="color:var(--muted);font-size:10px;margin-top:2px">${meta.label} · ${fmtDist(dist)}</div>
+        </div>
+        <button style="background:rgba(0,229,160,.12);border:1px solid rgba(0,229,160,.3);border-radius:4px;color:var(--accent);font-family:var(--mono);font-size:9px;padding:2px 6px;cursor:pointer;flex-shrink:0"
+          onclick="event.stopPropagation();addWaypointAt(${el.lat.toFixed(6)},${el.lon.toFixed(6)},'${name.replace(/'/g,'').slice(0,20)}')">+ WP</button>
+      `;
+      item.onclick = () => map.setView([el.lat, el.lon], 14);
+      container.appendChild(item);
+
+      // Custom colored circle marker on map
+      const icon = L.divIcon({
+        html: `<div style="background:${meta.color};width:10px;height:10px;border-radius:50%;border:2px solid rgba(0,0,0,.5);box-shadow:0 0 6px ${meta.color}88"></div>`,
+        iconSize: [10, 10],
+        iconAnchor: [5, 5],
+        className: ''
+      });
+
+      const marker = L.marker([el.lat, el.lon], { icon })
+        .addTo(map)
+        .bindPopup(`<b>${meta.emoji} ${name}</b><br><span style="color:#888">${meta.label}</span><br>${el.lat.toFixed(5)}, ${el.lon.toFixed(5)}`);
+      portMarkers.push(marker);
+    });
+
+    // Footer count
+    if (data.elements.length > 20) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:6px 0';
+      note.textContent = `Showing 20 of ${data.elements.length} features`;
+      container.appendChild(note);
+    }
+
+  } catch (err) {
+    console.error('Marine data error:', err);
+    container.innerHTML = `<span style="color:var(--danger)">⚠ ${err.message}</span><br><span style="color:var(--muted);font-size:10px">All Overpass mirrors tried. Check network / try zooming.</span>`;
+    setTimeout(() => getNearbyPorts(lat, lon), 5000);
+  }
+}
+
+// Quick-add waypoint from sidebar button
+function addWaypointAt(lat, lon, label) {
+  document.getElementById('wp-lat').value = lat;
+  document.getElementById('wp-lon').value = lon;
+  document.getElementById('wp-lbl').value = label;
+  if (!document.getElementById('wp-alt').value) document.getElementById('wp-alt').value = '0';
+  addWaypoint();
+}
+
+/* DEBOUNCE — wait 1.5s after pan/zoom stops before querying */
+
+// No longer driven by map movement — driven by GPS/waypoints instead
+// Only re-search on moveend if there's no GPS and no waypoints
+map.on('moveend', () => {
+  const gpsLat = document.getElementById('pos-lat').textContent;
+  const hasGps = gpsLat !== '—';
+  const hasWaypoints = waypoints.length > 0;
+  if (hasGps || hasWaypoints) return; // reference point won't change with map pan
+  clearTimeout(portSearchTimer);
+  portSearchTimer = setTimeout(() => {
+    const c = map.getCenter();
+    getNearbyPorts(c.lat, c.lng);
+  }, 1500);
+});
+
+setTimeout(() => getNearbyPorts(0, 0), 2000); // lat/lon ignored, computed inside
+
+/* Waypoints */
+function addWaypoint() {
+  const lat=parseFloat(document.getElementById('wp-lat').value);
+  const lon=parseFloat(document.getElementById('wp-lon').value);
+  const alt=parseFloat(document.getElementById('wp-alt').value)||10;
+  const lbl=document.getElementById('wp-lbl').value.trim();
+  if(isNaN(lat)||isNaN(lon)) { toast('Enter valid lat/lon','err'); return; }
+  waypoints.push({lat,lon,alt,label:lbl,reached:false});
+  ['wp-lat','wp-lon','wp-lbl'].forEach(id=>document.getElementById(id).value='');
+  renderWpList(); drawMap();
+  if(waypoints.length===1){ mapCenterLat=lat; mapCenterLon=lon; resetMapView(); }
+  toast('WP '+waypoints.length+' added','ok');
+  getNearbyPorts(0, 0);
+}
+function useCurrentPos() {
+  const lat=document.getElementById('pos-lat').textContent, lon=document.getElementById('pos-lon').textContent;
+  if(lat==='—'||lon==='—') { toast('No GPS fix — poll telemetry first','err'); return; }
+  document.getElementById('wp-lat').value=lat; document.getElementById('wp-lon').value=lon;
+}
+function deleteWaypoint(i) { waypoints.splice(i,1); if(currentWpIdx>=waypoints.length)currentWpIdx=waypoints.length-1; renderWpList(); drawMap(); }
+function clearWaypoints() { if(missionState==='running'){toast('Abort first','err');return;} waypoints=[]; currentWpIdx=-1; renderWpList(); drawMap(); }
+
+function renderWpList() {
+  const el=document.getElementById('wp-list');
+  document.getElementById('wp-count').textContent=waypoints.length+' point'+(waypoints.length!==1?'s':'');
+  if(!waypoints.length){ el.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:14px 0">No waypoints.<br>Click the map or use the form.</div>'; return; }
+
+  // total distance
+  let totalDist=0;
+  for(let i=1;i<waypoints.length;i++) totalDist+=haversine(waypoints[i-1].lat,waypoints[i-1].lon,waypoints[i].lat,waypoints[i].lon);
+
+  el.innerHTML='';
+  waypoints.forEach((wp,i)=>{
+    const div=document.createElement('div');
+    div.className='wp-item'+(i===currentWpIdx?' active-wp':'')+(wp.reached?' reached':'');
+    div.innerHTML=`
+      <div class="wp-num">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div class="wp-coords">${wp.lat.toFixed(5)}, ${wp.lon.toFixed(5)}${wp.label?' <span class="wp-lbl-txt">· '+wp.label+'</span>':''}</div>
+        <div class="wp-alt-txt">Alt ${wp.alt}m${i>0?' · '+fmtDist(haversine(waypoints[i-1].lat,waypoints[i-1].lon,wp.lat,wp.lon)):' · Home'}</div>
+      </div>
+      <button class="wp-del" onclick="deleteWaypoint(${i})">✕</button>
+    `;
+    el.appendChild(div);
+  });
+
+  if(waypoints.length>1){
+    const footer=document.createElement('div');
+    footer.style.cssText='font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right;padding:6px 2px';
+    footer.textContent='Total: '+fmtDist(totalDist);
+    el.appendChild(footer);
+  }
+}
+function fmtDist(m){ return m>1000?(m/1000).toFixed(2)+'km':Math.round(m)+'m'; }
+
+/* Mission control */
+function startMission() {
+  if(!waypoints.length){toast('Add waypoints first','err');return;}
+  if(missionState==='running') return;
+  missionState='running'; currentWpIdx=0;
+  waypoints.forEach(w=>w.reached=false);
+  setMsBadge('running','Running');
+  document.getElementById('btn-pause').disabled=false;
+  document.getElementById('btn-abort').disabled=false;
+  document.getElementById('btn-start').disabled=true;
+  renderWpList(); drawMap();
+  uploadMission();
+  runStep();
+}
+function pauseMission() {
+  if(missionState!=='running') return;
+  missionState='paused'; clearTimeout(missionTimer);
+  setMsBadge('paused','Paused');
+  const b=document.getElementById('btn-pause');
+  b.textContent='▶ Resume'; b.onclick=resumeMission;
+  if(piHost) fetch(piHost+'/api/mission/pause',{method:'POST',headers:{'X-API-Key':apiKey}}).catch(()=>{});
+}
+function resumeMission() {
+  missionState='running'; setMsBadge('running','Running');
+  const b=document.getElementById('btn-pause'); b.textContent='⏸ Pause'; b.onclick=pauseMission;
+  if(piHost) fetch(piHost+'/api/mission/resume',{method:'POST',headers:{'X-API-Key':apiKey}}).catch(()=>{});
+  runStep();
+}
+function abortMission() {
+  missionState='idle'; clearTimeout(missionTimer); currentWpIdx=-1;
+  waypoints.forEach(w=>w.reached=false);
+  setMsBadge('idle','Aborted');
+  document.getElementById('btn-pause').disabled=true;
+  document.getElementById('btn-abort').disabled=true;
+  document.getElementById('btn-start').disabled=false;
+  const b=document.getElementById('btn-pause'); b.textContent='⏸ Pause'; b.onclick=pauseMission;
+  setMsProg(0,'Mission aborted');
+  renderWpList(); drawMap();
+  if(piHost) fetch(piHost+'/api/mission/abort',{method:'POST',headers:{'X-API-Key':apiKey}}).catch(()=>{});
+}
+function runStep() {
+  if(missionState!=='running') return;
+  if(currentWpIdx>=waypoints.length){
+    missionState='done'; setMsBadge('done','Complete'); setMsProg(100,'All '+waypoints.length+' waypoints reached');
+    document.getElementById('btn-pause').disabled=true;
+    document.getElementById('btn-abort').disabled=true;
+    document.getElementById('btn-start').disabled=false;
+    renderWpList(); drawMap(); return;
+  }
+  setMsProg(Math.round(currentWpIdx/waypoints.length*100),'WP '+(currentWpIdx+1)+' / '+waypoints.length);
+  missionTimer=setTimeout(()=>{
+    if(missionState!=='running') return;
+    waypoints[currentWpIdx].reached=true; currentWpIdx++;
+    renderWpList(); drawMap(); runStep();
+  },2200);
+}
+function uploadMission() {
+  if(!piHost){navLog('err','Not connected — mission simulated locally');return;}
+  fetch(piHost+'/api/mission/start',{method:'POST',headers:{'X-API-Key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({waypoints})})
+    .then(r=>r.json()).then(d=>navLog('ack','Mission upload: '+(d.ok?'OK':'FAIL'))).catch(()=>navLog('err','Upload failed'));
+}
+function setMsBadge(s,t){ const b=document.getElementById('ms-badge'); b.className='ms-badge '+s; b.textContent=t; }
+function setMsProg(p,t){ document.getElementById('ms-prog').style.width=p+'%'; document.getElementById('ms-text').textContent=t; }
+
+/* Export / Import */
+function exportMission() {
+  if(!waypoints.length){toast('No waypoints','err');return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({waypoints},null,2)],{type:'application/json'}));
+  a.download='mission_'+Date.now()+'.json'; a.click(); toast('Exported','ok');
+}
+function importMission(){ document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(!d.waypoints||!Array.isArray(d.waypoints)) throw 0;
+      waypoints=d.waypoints.map(w=>({...w,reached:false})); currentWpIdx=-1;
+      if(waypoints.length){ mapCenterLat=waypoints[0].lat; mapCenterLon=waypoints[0].lon; }
+      renderWpList(); resetMapView(); toast(waypoints.length+' waypoints imported','ok');
+    }catch{ toast('Invalid mission file','err'); }
+  };
+  r.readAsText(file); e.target.value='';
+}
+
+/* Modal */
+function confirmAction(action,title,desc){ pendingAction=action; document.getElementById('modal-title').textContent=title; document.getElementById('modal-desc').textContent=desc; document.getElementById('modal').classList.add('show'); }
+function closeModal(){ document.getElementById('modal').classList.remove('show'); pendingAction=null; }
+function modalConfirm(){ closeModal(); if(pendingAction) sendControl(pendingAction); }
+
+/* Toast */
+let toastT;
+function toast(msg,type){ const e=document.getElementById('toast'); e.textContent=msg; e.className='show '+(type||''); clearTimeout(toastT); toastT=setTimeout(()=>e.className='',3000); }
+
+/* Init */
+const up=new URLSearchParams(window.location.search);
+if(up.get('host')) document.getElementById('pi-host').value=up.get('host');
+drawMap();
+</script>
+</body>
+</html>
