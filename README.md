@@ -52,9 +52,7 @@ The hull is inspired by the **Ulstein X-BOW®** concept. Unlike conventional bow
 
 The vessel includes an independently controlled bow thruster used for low-speed manoeuvring, station keeping, docking assistance and future autonomous positioning algorithms.
 
-<img width="958" height="646" alt="Thruster front" src="https://github.com/user-attachments/assets/927a7e64-3f8c-47ba-a909-36b8f3d30400" />
-<img width="757" height="698" alt="Thruster iso" src="https://github.com/user-attachments/assets/2923d22d-d1de-4160-9dc1-82e5a118dfe5" />
-<img width="1163" height="674" alt="Thruster rear" src="https://github.com/user-attachments/assets/4d0db25b-a041-4e67-b738-5c0489174c65" />
+<img width="958" height="646" alt="Thruster front" src="https://github.com/user-attachments/assets/927a7e64-3f8c-47ba-a909-36b8f3d30400" /> | <img width="757" height="698" alt="Thruster iso" src="https://github.com/user-attachments/assets/2923d22d-d1de-4160-9dc1-82e5a118dfe5" /> | <img width="1163" height="674" alt="Thruster rear" src="https://github.com/user-attachments/assets/4d0db25b-a041-4e67-b738-5c0489174c65" />
 
 ### Azipod Propulsion *(In Development)*
 
