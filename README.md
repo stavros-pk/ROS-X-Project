@@ -56,9 +56,24 @@ The vessel includes an independently controlled bow thruster used for low-speed 
 <img width="757" height="698" alt="Thruster iso" src="https://github.com/user-attachments/assets/2923d22d-d1de-4160-9dc1-82e5a118dfe5" />
 <img width="1163" height="674" alt="Thruster rear" src="https://github.com/user-attachments/assets/4d0db25b-a041-4e67-b738-5c0489174c65" />
 
-### Azipod Propulsion
+### Azipod Propulsion *(In Development)*
 
-*In Progress*
+A future objective of ROS-X is the integration of an **Azipod-inspired propulsion system**, providing the vessel with full-vector thrust capabilities and significantly improved manoeuvrability.
+
+Unlike conventional fixed propulsion arrangements, an azimuthing propulsion unit can rotate around its vertical axis, allowing thrust to be directed in any desired heading. This capability enables precise low-speed control, enhanced station-keeping performance, and greater effectiveness when operating in confined or complex environments such as marinas, harbours, and docking areas.
+
+The design philosophy follows the propulsion concepts developed during the **Suomenlinna Project**, adapting them to the ROS-X platform and its autonomous navigation framework.
+
+Planned capabilities include:
+
+* 360° thrust vectoring
+* Dynamic positioning support
+* Improved autonomous docking
+* Enhanced station-keeping performance
+* Reduced turning radius
+* Integration with future navigation and control algorithms
+
+The Azipod system remains under active development and will form a key component of the vessel's long-term autonomy and manoeuvring capabilities.
 
 ---
 
