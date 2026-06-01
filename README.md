@@ -204,13 +204,27 @@ The hardware used in this project can be summarized in the following table:
 | DHT11 | Temperature & humidity |
 | 5× VL53L0X | Time-of-Flight proximity |
 | Bow Thruster | Low-speed manoeuvring |
-| Dual Rudders | Directional control |
+| Dual Azipod Thrusters | Directional control |
 | ESC / Motor Controller | Propulsion interface |
 | USB Joystick | Manual teleoperation |
 
 ---
 
 ## Roadmap
+### Sensors
+- [x] GPS publisher (NEO-M6, UART/NMEA)
+- [x] IMU publisher (MPU-6050, I²C)
+- [x] Temperature & humidity publisher (DHT11)
+- [x] 5-zone ToF proximity publisher (VL53L0X)
+
+### Actuators
+- [x] Stepper motor control
+- [x] DC motor control
+
+### Teleoperation
+- [x] Serial propulsion control (joystick → ESC)
+- [x] Remote joystick teleoperation via SSH
+- [x] Web dashboard (telemetry + command)
 
 ### Navigation
 - [ ] Waypoint navigation
