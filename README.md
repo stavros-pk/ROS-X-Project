@@ -3,7 +3,7 @@
 ### Autonomous Surface Vessel Platform based on ROS 2
 
 <p align="center">
-<img width="1447" height="722" alt="Screenshot (73)" src="https://github.com/user-attachments/assets/8533ab65-cb60-4fed-9f17-22c604282bcf" />
+<img width="1428" height="616" alt="Screenshot from 2026-07-10 13-35-27" src="https://github.com/user-attachments/assets/02675355-e42e-47bf-9745-0f35752f7269" />
 </p>
 
 > ROS-X is an experimental Autonomous Surface Vessel (ASV) developed using ROS 2 and inspired by the Ulstein X-BOW® hull concept. The project's goal is to achieve autonomous navigation, remote teleoperation, sensor fusion, mission planning and real-time vessel monitoring through a custom web dashboard. The project started in March of 2026 and it is the continuation of the Suomenlinna Project.
@@ -45,8 +45,8 @@ The hull is inspired by the **Ulstein X-BOW®** concept. Unlike conventional bow
 
 ### Hull
 
-<img width="1447" height="722" alt="Hull isometric" src="https://github.com/user-attachments/assets/a57675d0-178d-48ff-9591-ef3cf4e1fa2f" />
-<img width="1507" height="687" alt="Hull side" src="https://github.com/user-attachments/assets/949acdf6-3ff7-4dff-9298-b34e189528cf" />
+<img width="1428" height="616" alt="Screenshot from 2026-07-10 13-35-27" src="https://github.com/user-attachments/assets/842354e1-d316-49e9-abd0-392318b24c66" />
+<img width="1401" height="492" alt="Screenshot from 2026-07-10 13-34-37" src="https://github.com/user-attachments/assets/6d015b4d-611e-4637-aa8f-853b66eb3fb6" />
 
 ### Bow Thruster Assembly
 
@@ -74,6 +74,17 @@ A future objective of ROS-X is the integration of an **Azipod-inspired propulsio
 Unlike conventional fixed propulsion arrangements, an azimuthing propulsion unit can rotate around its vertical axis, allowing thrust to be directed in any desired heading. This capability enables precise low-speed control, enhanced station-keeping performance, and greater effectiveness when operating in confined or complex environments such as marinas, harbours, and docking areas.
 
 The design philosophy follows the propulsion concepts developed during the **Suomenlinna Project**, adapting them to the ROS-X platform and its autonomous navigation framework.
+
+<table>
+  <tr>
+    <td align="center"><img width="606" height="598" alt="Screenshot from 2026-07-10 13-39-05" src="https://github.com/user-attachments/assets/183e11bb-12d4-46d7-808f-011fc7526a3a" /></td>
+    <td align="center"><img width="469" height="780" alt="Screenshot from 2026-07-10 13-38-33" src="https://github.com/user-attachments/assets/1927d7d1-0356-4049-aace-fa2ec7300c73" /></td>
+    <td align="center"><img width="884" height="710" alt="Screenshot from 2026-07-10 13-40-56" src="https://github.com/user-attachments/assets/e8ffa7f2-7152-48e3-b6a4-083005f9b26e" /></td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><b>Azipod Propulsion 3D Design</b></td>
+  </tr>
+</table>
 
 Planned capabilities include:
 
