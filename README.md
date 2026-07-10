@@ -98,101 +98,135 @@ Planned capabilities include:
 The Azipod system remains under active development and will form a key component of the vessel's long-term autonomy and manoeuvring capabilities.
 
 ---
-
 ## System Architecture
-
+ 
+Development has moved into **simulation-first validation** using the [VRX](https://github.com/osrf/vrx) (Virtual RobotX) environment on Gazebo. A custom WAM-V model was built for this — starting from the stock dual-thruster hull and adding an **independently controlled bow thruster**, matching the physical bow thruster design shown above, so the exact same control and navigation stack developed here can later be transferred to the real vessel with minimal changes.
+ 
+The ROS 2 stack is organized into four packages:
+ 
+| Package | Responsibility |
+|---|---|
+| `xros_control` | Mode/state management and joystick-driven vessel control |
+| `xros_automation` | Heading-hold PID controller |
+| `xros_path_planning` | Waypoint route and Point-of-Interest (POI) services |
+| `data_interfaces` | Shared custom messages and services (`Actuators`, `Poi`, waypoint/POI services) |
+ 
 ```text
-                    ┌─────────────────────┐
-                    │   Web Dashboard     │
-                    │  Mission Planning   │
-                    │ Telemetry & Control │
-                    └──────────┬──────────┘
+                    ┌──────────────────────┐
+                    │   Web Dashboard      │
+                    │  Mission Planning    │
+                    │ Telemetry & Control  │
+                    └──────────┬───────────┘
                                │ WiFi / Ethernet
                                ▼
     ┌──────────────────────────────────────────────────────┐
-    │                    Raspberry Pi 4                    │
-    │                      ROS 2 Core                      │
+    │                    ROS 2 Core                        │
     ├──────────────────────────────────────────────────────┤
-    │  Sensors Layer                                       │
-    │  gps_neo_m6    ──► gps_data                          │
-    │  mpu6050       ──► imu_data                          │
-    │  magnetometer  ──► heading_data                      │
-    │  dht           ──► environment_data                  │
-    │  tof_vl53l0x   ──► proximity_data                    │
+    │  Input Layer                                         │
+    │  joy_node          ──► /xros/joy                     │
     ├──────────────────────────────────────────────────────┤
-    │  Control Layer                                       │
-    │  joy_node      ──► /joy                              │
-    │  serial_control──► propulsion commands               │
+    │  Mode Layer (xros_control)                           │
+    │  mode_selector         ──► /robot_status             │
+    │  manual_operation_mode ──► /manual_mode              │
+    │  vessel_control        ──► thrust / position commands│
     ├──────────────────────────────────────────────────────┤
-    │  Mission Layer (In Progress)                         │
-    │  waypoint_manager                                    │
-    │  navigation_logic                                    │
-    │  obstacle_avoidance                                  │
+    │  Automation Layer (xros_automation)                  │
+    │  heading_pid  (setpoint, feedback) ──► control_effort│
+    ├──────────────────────────────────────────────────────┤
+    │  Mission Layer (xros_path_planning)                  │
+    │  waypoint_handler  ──► route / current waypoint (srv)│
+    │  poi_handler        ──► points of interest (srv)     │
     └──────────────────────┬───────────────────────────────┘
-                           │ Serial
+                           │
                            ▼
-                  ┌─────────────────┐
-                  │  Arduino / ESC  │
-                  └────────┬────────┘
-                           ▼
-                    Motors / Rudders
+                 Simulated / Physical Vessel
+             (VRX WAM-V in Gazebo, or Arduino/ESC)
 ```
-
+ 
 ---
-
+ 
 ## ROS Graph
-
+ 
+The current graph, as brought up by `xros_bringup.launch.py`:
+ 
 ```text
-gps_neo_m6  ──► gps_data
-mpu6050     ──► imu_data
-magnetometer──► heading_data
-dht         ──► environment_data
-tof_vl53l0x ──► proximity_data
-
-joy_node ──► /joy ──► serial_control ──► Port Motor
-                                     ──► Starboard Motor
-                                     ──► Port Angle
-                                     ──► Starboard Angle
-
+joy_node ──► /xros/joy ──┬──► mode_selector ──► /robot_status
+                           ├──► manual_operation_mode ──► /manual_mode
+                           └──► vessel_control
+ 
+/wamv/sensors/imu/imu/data ──► vessel_control ──► /xros/current_heading ──► heading_pid
+                                              └──► /xros/desired_heading ──► heading_pid
+                                                                                │
+                                                                                ▼
+                                                                     /xros/pid_effort
+                                                                                │
+                                                                                ▼
+vessel_control ◄───────────────────────────────────────────────────────────────┘
+     │
+     ├──► /wamv/thrusters/left/thrust   ├──► /wamv/thrusters/left/pos
+     ├──► /wamv/thrusters/right/thrust  ├──► /wamv/thrusters/right/pos
+     └──► /wamv/thrusters/bow/thrust
+ 
+waypoint_handler  (services: vessel/get_route, vessel/get_current_waypoint, vessel/add_waypoint)
+poi_handler       (services: vessel/add_poi, vessel/get_pois, vessel/remove_poi)
 ```
-
+ 
+`vessel_control` is the central node: it reads joystick axes, the active operating mode, and live IMU heading, then drives the three thrusters directly for **normal** and **bow** manual modes, or hands heading control to `heading_pid` for the **crab** mode, applying its output (`pid_effort`) to the bow thruster for automatic heading hold.
+ 
 ---
-
+ 
 ## Sensor Suite
-
-### GPS — u-blox NEO-M6
-
-Provides latitude, longitude, UTC time and position fix.
-
-### IMU — MPU6050
-
-Provides 3-axis acceleration and angular velocity.
-
-### Magnetometer
-
-Provides magnetic heading and compass bearing. Intended for EKF fusion with the MPU6050 for robust yaw estimation.
-
-    ---
-
-## Vessel Control
-
-The propulsion system uses azipod thrust. The control node receives joystick commands and converts them into port/starboard thrust and angle, transmitted over serial to the motor controller hardware.
-
+ 
+For simulation development, sensor feedback is provided by the VRX/Gazebo WAM-V model rather than physical hardware:
+ 
+### IMU (simulated)
+ 
+Publishes orientation on `/wamv/sensors/imu/imu/data`. `vessel_control` converts the quaternion to a yaw heading in degrees, which serves as the live feedback signal for the heading-hold PID controller.
+ 
+### GPS (simulated)
+ 
+Provides latitude/longitude used by the waypoint and POI services (`xros_path_planning`) for route definition and mission points.
+ 
+### Camera & Lidar (simulated)
+ 
+A forward-facing camera and a 16-beam lidar are configured on the simulated vessel (`my_vessel_config`), reserved for the upcoming obstacle avoidance and perception work on the roadmap.
+ 
+The physical sensor suite (GPS NEO-M6, MPU6050 IMU, magnetometer, DHT11, VL53L0X) listed under [Hardware](#hardware) remains the target sensor set for the physical vessel; the simulation environment mirrors this set so that control and navigation logic developed against it transfers directly once the physical build is ready for integration testing.
+ 
 ---
-
+ 
+## Vessel Control
+ 
+The vessel is controlled through three independently driven thrusters — **left**, **right**, and an **independently steerable bow thruster** — coordinated by `vessel_control` based on the active operating mode:
+ 
+| Mode | Behaviour |
+|---|---|
+| **Normal** | Differential left/right thrust and steering from joystick axes; bow thruster idle |
+| **Bow** | Bow thruster driven directly from joystick throttle for close-quarters manoeuvring |
+| **Crab** | Left/right thrusters provide lateral (strafe) thrust; the bow thruster is driven automatically by `heading_pid` to hold or nudge heading, decoupling heading control from lateral movement |
+ 
+Mode selection is layered:
+- **`mode_selector`** — top-level state: `idle → manual → autonomous`, plus a dedicated `emergency` state that can only be cleared by explicitly returning to `idle`
+- **`manual_operation_mode`** — while in `manual`, cycles the sub-mode above (`normal / bow / crab`) via joystick buttons
+Both mode nodes accept changes via joystick buttons, a `String` command topic, or a ROS parameter — so mode can be driven from teleoperation, the dashboard, or a command-line/service call interchangeably.
+ 
+---
+ 
 ## Remote Teleoperation
-
-The vessel can be controlled remotely via SSH using a joystick with the assistance of the teleoperation feature of ROS2 suite.
-
+ 
+The vessel — simulated or physical — is driven the same way: joystick input published on `/xros/joy` flows into `mode_selector` and `manual_operation_mode` for state control, and into `vessel_control` for direct thrust/steering commands.
+ 
 ```text
-Joystick ──► joy_node ──► teleop_twist_joy ──► serial_control ──► Vessel
+Joystick ──► joy_node ──► /xros/joy ──┬──► mode_selector
+                                      ├──► manual_operation_mode
+                                      └──► vessel_control ──► Thrusters
 ```
-
+ 
 ```bash
-ros2 run joy joy_node
-ros2 run teleop_twist_joy teleop_node
-ros2 run vessel_control serial_vessel_control
+ros2 launch launch_files xros_bringup.launch.py
 ```
+ 
+This single launch file brings up the full stack — joystick input, mode management, vessel control, heading-hold PID, and the waypoint/POI mission services — against either the VRX simulation or the physical vessel, depending on which thruster topics are active.
 
 ---
 
