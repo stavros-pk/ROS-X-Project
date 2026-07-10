@@ -101,6 +101,18 @@ The Azipod system remains under active development and will form a key component
 ## System Architecture
  
 Development has moved into **simulation-first validation** using the [VRX](https://github.com/osrf/vrx) (Virtual RobotX) environment on Gazebo. A custom WAM-V model was built for this — starting from the stock dual-thruster hull and adding an **independently controlled bow thruster**, matching the physical bow thruster design shown above, so the exact same control and navigation stack developed here can later be transferred to the real vessel with minimal changes.
+
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img width="891" height="545" alt="Screenshot from 2026-07-10 14-16-39" src="https://github.com/user-attachments/assets/a2dee705-4e33-447c-8118-a9ea173d0b45" />
+</td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><b>VRX Simulation</b></td>
+  </tr>
+</table>
+</div>
  
 The ROS 2 stack is organized into four packages:
  
@@ -149,27 +161,17 @@ The ROS 2 stack is organized into four packages:
  
 The current graph, as brought up by `xros_bringup.launch.py`:
  
-```text
-joy_node ──► /xros/joy ──┬──► mode_selector ──► /robot_status
-                         ├──► manual_operation_mode ──► /manual_mode
-                         └──► vessel_control
- 
-/wamv/sensors/imu/imu/data ──► vessel_control ┬──► /xros/current_heading ──► heading_pid
-                                              └──► /xros/desired_heading ──► heading_pid
-                                                                                │
-                                                                                ▼
-                                                                     /xros/pid_effort
-                                                                                │
-                                                                                ▼
-vessel_control ◄────────────────────────────────────────────────────────────────┘
-     │
-     ├──► /wamv/thrusters/left/thrust   ├──► /wamv/thrusters/left/pos
-     ├──► /wamv/thrusters/right/thrust  ├──► /wamv/thrusters/right/pos
-     └──► /wamv/thrusters/bow/thrust
- 
-waypoint_handler  (services: vessel/get_route, vessel/get_current_waypoint, vessel/add_waypoint)
-poi_handler       (services: vessel/add_poi, vessel/get_pois, vessel/remove_poi)
-```
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img width="1544" height="536" alt="Screenshot from 2026-07-10 14-20-44" src="https://github.com/user-attachments/assets/5887b750-d3ef-420a-ae6f-f8a7e47824c0" />
+</td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><b>RQT Graph</b></td>
+  </tr>
+</table>
+</div>
  
 `vessel_control` is the central node: it reads joystick axes, the active operating mode, and live IMU heading, then drives the three thrusters directly for **normal** and **bow** manual modes, or hands heading control to `heading_pid` for the **crab** mode, applying its output (`pid_effort`) to the bow thruster for automatic heading hold.
  
