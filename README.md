@@ -136,11 +136,11 @@ The ROS 2 stack is organized into four packages:
     │  Mission Layer (xros_path_planning)                  │
     │  waypoint_handler  ──► route / current waypoint (srv)│
     │  poi_handler        ──► points of interest (srv)     │
-    └──────────────────────┬───────────────────────────────┘
-                           │
-                           ▼
-                 Simulated / Physical Vessel
-             (VRX WAM-V in Gazebo, or Arduino/ESC)
+    └──────────────────────────┬───────────────────────────┘
+                               │
+                               ▼
+                   Simulated / Physical Vessel
+              (VRX WAM-V in Gazebo, or Arduino/ESC)
 ```
  
 ---
@@ -151,17 +151,17 @@ The current graph, as brought up by `xros_bringup.launch.py`:
  
 ```text
 joy_node ──► /xros/joy ──┬──► mode_selector ──► /robot_status
-                           ├──► manual_operation_mode ──► /manual_mode
-                           └──► vessel_control
+                         ├──► manual_operation_mode ──► /manual_mode
+                         └──► vessel_control
  
-/wamv/sensors/imu/imu/data ──► vessel_control ──► /xros/current_heading ──► heading_pid
+/wamv/sensors/imu/imu/data ──► vessel_control ┬──► /xros/current_heading ──► heading_pid
                                               └──► /xros/desired_heading ──► heading_pid
                                                                                 │
                                                                                 ▼
                                                                      /xros/pid_effort
                                                                                 │
                                                                                 ▼
-vessel_control ◄───────────────────────────────────────────────────────────────┘
+vessel_control ◄────────────────────────────────────────────────────────────────┘
      │
      ├──► /wamv/thrusters/left/thrust   ├──► /wamv/thrusters/left/pos
      ├──► /wamv/thrusters/right/thrust  ├──► /wamv/thrusters/right/pos
