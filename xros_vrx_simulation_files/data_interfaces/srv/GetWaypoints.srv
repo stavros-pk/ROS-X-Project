@@ -1,0 +1,4 @@
+int64 waypoint_index
+---
+geographic_msgs/GeoPoseStamped waypoint
+bool valid

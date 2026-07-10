@@ -1,0 +1,7 @@
+string name
+string category
+float64 latitude
+float64 longitude
+---
+bool success
+int32 total_pois
