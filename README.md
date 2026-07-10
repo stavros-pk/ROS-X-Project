@@ -211,7 +211,60 @@ Mode selection is layered:
 - **`mode_selector`** — top-level state: `idle → manual → autonomous`, plus a dedicated `emergency` state that can only be cleared by explicitly returning to `idle`
 - **`manual_operation_mode`** — while in `manual`, cycles the sub-mode above (`normal / bow / crab`) via joystick buttons
 Both mode nodes accept changes via joystick buttons, a `String` command topic, or a ROS parameter — so mode can be driven from teleoperation, the dashboard, or a command-line/service call interchangeably.
- 
+
+## Manual Mode Behaviour Analysis
+
+A breakdown of exactly what the vessel does in each manual sub-mode, based on `vessel_control.py`.
+
+### Normal — coupled thrust & steering
+
+| Axis | Drives |
+|---|---|
+| Throttle | Both left and right thrusters, identical value |
+| Steering | Both left and right thruster angles, identical |
+
+Left and right thrusters always move together — same thrust, same angle. This isn't differential (tank-style) steering; it behaves like a single steerable outboard duplicated on both sides, similar to a rudder-and-throttle boat. Bow thruster is forced off.
+
+### Bow — lateral nudge only
+
+| Axis | Drives |
+|---|---|
+| Throttle | Bow thruster only|
+
+Left and right thrusters are shut off and locked straight ahead. The bow thruster fires port/starboard for close-quarters nudging, with zero forward propulsion. It reuses the same scale (2000) as full forward drive in Normal mode — worth revisiting once real bow thruster limits are known.
+
+### Crab — decoupled heading-hold + lateral strafe
+
+Two independent control loops run simultaneously:
+
+**Heading loop (closed-loop, via external PID):**
+
+| Axis | Effect |
+|---|---|
+| Twist | Nudges the target heading ±1°/tick |
+
+On entering Crab mode, the current heading is locked in as the initial target. `vessel_control` only sets the target and reports actual heading (`desired_heading` / `current_heading`) — it does not compute the correction itself. The external `heading_pid` node closes the loop and applies its output to the bow thruster independently, at its own update rate (not tied to joystick input).
+
+**Lateral loop (open-loop, direct from joystick):**
+
+| Axis | Drives |
+|---|---|
+| Joystick | Left/right thrust direction (`atan2`) and magnitude, identical on both sides |
+
+Left and right thrusters point in the strafe direction and fire together — omnidirectional lateral movement rather than fore/aft drive. Combined with the heading loop, this lets the vessel move sideways or diagonally while holding (or slowly adjusting) a fixed heading — true crab-walking.
+
+### Idle / Emergency — hard stop
+
+All five outputs (`left_thrust`, `right_thrust`, `bow_thrust`, `left_pos`, `right_pos`) are forced to `0.0` every cycle, unconditionally, regardless of joystick input.
+
+### Summary
+
+| Mode | Left/Right thrusters | Bow thruster | Forward motion | Lateral motion | Heading control |
+|---|---|---|---|---|---|
+| **Normal** | Coupled thrust + steering | Off | ✅ | ❌ | Manual (via steering) |
+| **Bow** | Off | Manual throttle | ❌ | Nudge only | Manual (via bow nudge) |
+| **Crab** | Strafe thrust + direction | PID-controlled | ❌ | ✅ | Automatic (PID hold) |
+| **Idle / Emergency** | Off | Off | ❌ | ❌ | — |
 ---
  
 ## Remote Teleoperation
